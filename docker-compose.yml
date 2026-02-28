@@ -20,11 +20,11 @@ services:
       - "/dev/mem:/dev/mem"
       - "/dev/gpiomem:/dev/gpiomem"
   #  network_mode: "host"
-  ustreamer:
-    build: ./ustreamer
-    devices:
-      - "/dev/video0:/dev/video0"
-      - "/dev/video1:/dev/video1"
-    privileged: true
-    ports:
-      - "8080:8080"
+  #ustreamer:
+  #  build: ./ustreamer
+  #  devices:
+  #    - "/dev/video0:/dev/video0"
+  #    - "/dev/video1:/dev/video1"
+  #  privileged: true
+  #  ports:
+  #    - "8080:8080"

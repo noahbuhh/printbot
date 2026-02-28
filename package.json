@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "A simple automated printer",
   "scripts": {
-    "publish": "balena push robertguehne/3d-druck",
+    "publish": "balena push g_noah_weers/printbot",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Robert Guehne",
