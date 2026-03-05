@@ -107,7 +107,9 @@ def list_ftp_files(printer):
 def send_print_command(printer, file_url, subtask_name):
     payload = {
         "print": {
+            "sequence_id": str(int(time.time())),
             "command": "project_file",
+            "param": "Metadata/plate_1.gcode",
             "url": file_url,
             "subtask_name": subtask_name,
             "bed_type": "auto",
@@ -117,7 +119,6 @@ def send_print_command(printer, file_url, subtask_name):
             "vibration_cali": True,
             "layer_inspect": False,
             "use_ams": False,
-            "sequence_id": "0",
         }
     }
     client = mqtt_clients.get(printer['id'])
