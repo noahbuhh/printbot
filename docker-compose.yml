@@ -1,4 +1,8 @@
 version: "2.1"
+
+volumes:
+  printer-data:
+
 services:
   nginx:
     build: ./nginx
@@ -17,9 +21,13 @@ services:
     privileged: true # Required for GPIO access
     restart: always
     devices:
-      - "/dev/mem:/dev/mem"
-      - "/dev/gpiomem:/dev/gpiomem"
+      - "/dev/gpiochip0:/dev/gpiochip0"
   #  network_mode: "host"
+  printer-monitor:
+    build: ./printer-monitor
+    restart: always
+    volumes:
+      - printer-data:/data
   #ustreamer:
   #  build: ./ustreamer
   #  devices:

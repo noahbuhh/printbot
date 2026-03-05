@@ -1,0 +1,9 @@
+FROM balenalib/%%BALENA_MACHINE_NAME%%-python:3-bookworm
+WORKDIR /usr/src/app
+RUN python3 -m venv /opt/venv
+COPY requirements.txt ./
+RUN /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 5000
+ENV PATH="/opt/venv/bin:$PATH"
+CMD ["python3", "monitor.py"]

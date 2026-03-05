@@ -1,39 +1,33 @@
 import time
-import pigpio
+import lgpio
 from flask import Flask, request, jsonify
 
-# Initialize Flask for a simple API
 app = Flask(__name__)
 
-# Connect to the pigpio daemon
-pi = pigpio.pi()
+# Open GPIO chip — no daemon required, works directly on /dev/gpiochip0
+CHIP = lgpio.gpiochip_open(0)
+print("lgpio: GPIO chip 0 opened")
 
-# Servo GPIO pin
-SERVO_PIN = 18
-
-# Open/Close Positions (adjustable via /settings)
 settings = {
     "open_position": 1900,
     "close_position": 2500
 }
 
-def move_servo(position):
-    """Move the servo to the given position."""
-    if pi.connected:
-        pi.set_servo_pulsewidth(SERVO_PIN, position)
-        time.sleep(1)
-        pi.set_servo_pulsewidth(SERVO_PIN, 0)
-        return f"Servo moved to {position}"
-    else:
-        return "pigpio daemon not running!"
+def move_servo(pin, position):
+    lgpio.gpio_claim_output(CHIP, pin, 0)
+    lgpio.tx_servo(CHIP, pin, position)
+    time.sleep(1)
+    lgpio.gpio_free(CHIP, pin)  # release pin to stop servo pulses
 
 @app.route('/open', methods=['GET'])
 def open_door():
-    return move_servo(settings["open_position"])
+    move_servo(18, settings["open_position"])
+    return f"Servo moved to {settings['open_position']}"
 
 @app.route('/close', methods=['GET'])
 def close_door():
-    return move_servo(settings["close_position"])
+    move_servo(18, settings["close_position"])
+    return f"Servo moved to {settings['close_position']}"
 
 @app.route('/settings', methods=['GET'])
 def get_settings():
@@ -48,6 +42,13 @@ def update_settings():
         settings["close_position"] = int(data["close_position"])
     return jsonify(settings)
 
+@app.route('/servo/<int:pin>/move', methods=['POST'])
+def move_servo_pin(pin):
+    data = request.get_json(force=True)
+    position = int(data.get('position', 0))
+    move_servo(pin, position)
+    return jsonify({'pin': pin, 'position': position})
+
 if __name__ == "__main__":
-    print("Starting door motor API...")
+    print("Starting door motor API (lgpio)...")
     app.run(host='0.0.0.0', port=3000)
