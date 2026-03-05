@@ -80,10 +80,22 @@ def list_ftp_files(printer):
         ftp.connect(printer['ip'], 990, timeout=10)
         ftp.login('bblp', printer['access_code'])
         ftp.prot_p()
-        entries = ftp.nlst('/sdcard/')
+
+        # Try common Bambu paths; fall back to root
+        entries = []
+        for path in ['/sdcard', '/sdcard/', '']:
+            try:
+                result = ftp.nlst(path) if path else ftp.nlst()
+                if result is not None:
+                    entries = result
+                    break
+            except ftplib.error_perm:
+                continue
+
         ftp.quit()
     except Exception as e:
         raise RuntimeError(f"FTP error: {e}")
+
     files = []
     for entry in entries:
         name = entry.split('/')[-1] if '/' in entry else entry
