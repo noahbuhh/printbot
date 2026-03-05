@@ -5,6 +5,7 @@ import socket
 import ssl
 import threading
 import time
+import urllib.parse
 import uuid
 from flask import Flask, jsonify, request
 import paho.mqtt.client as mqtt
@@ -105,11 +106,14 @@ def list_ftp_files(printer):
         name = entry.split('/')[-1] if '/' in entry else entry
         if not (name.endswith('.3mf') or name.endswith('.gcode')):
             continue
-        # Build the ftp URL from the actual entry path returned by the server
+        # Build ftp:/// URL — encode spaces/special chars
         if entry.startswith('/'):
-            url = f"ftp://{entry}"
+            path = entry
+        elif found_path:
+            path = '/' + found_path.strip('/') + '/' + name
         else:
-            url = f"ftp:///{found_path.strip('/')}/{name}".replace('///', '/')
+            path = '/' + name
+        url = 'ftp://' + urllib.parse.quote(path, safe='/')
         files.append({'name': name, 'url': url})
     return files
 
