@@ -636,8 +636,8 @@ app.get('/', (req, res) => {
             return;
           }
           document.getElementById('loopFileList').innerHTML = files.map(function(f) {
-            return '<button type="button" class="list-group-item list-group-item-action list-group-item-dark py-2 px-3"'
-              + ' style="font-size:0.82rem;font-family:\'JetBrains Mono\',monospace" data-file="' + escHtml(f) + '">'
+            return '<button type="button" class="list-group-item list-group-item-action list-group-item-dark mono py-2 px-3"'
+              + ' style="font-size:0.82rem" data-file="' + escHtml(f) + '">'
               + '<i class="bi bi-file-earmark-zip me-2 text-muted"></i>' + escHtml(f)
               + '</button>';
           }).join('');
