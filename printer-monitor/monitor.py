@@ -195,12 +195,19 @@ def make_mqtt_client(printer):
                 state['gcode_state'] = new_gstate
                 if new_gstate == 'FINISH' and prev_gstate != 'FINISH':
                     state['finish_time'] = time.time()
-                    if state.get('loop_enabled'):
-                        state['loop_phase'] = 'waiting'
-                        state['loop_next_at'] = time.time() + 300
-                        loop_trigger = (pid, state.get('loop_gen', 0))
                 elif prev_gstate == 'FINISH' and new_gstate != 'FINISH':
                     state['finish_time'] = None
+
+                ACTIVE = {'RUNNING', 'PREPARE', 'PAUSE'}
+                DONE   = {'FINISH', 'FAILED'}
+                prev_u = (prev_gstate or '').upper()
+                new_u  = (new_gstate  or '').upper()
+                ended  = (new_u in DONE   and prev_u not in DONE) \
+                      or (not new_u        and prev_u in ACTIVE)
+                if ended and state.get('loop_enabled'):
+                    state['loop_phase']   = 'waiting'
+                    state['loop_next_at'] = time.time() + 300
+                    loop_trigger = (pid, state.get('loop_gen', 0))
 
             bed_temp = state['bed_temp']
             current_servo_open = state['servo_open']
