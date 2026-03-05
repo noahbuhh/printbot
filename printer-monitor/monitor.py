@@ -1,6 +1,7 @@
 import ftplib
 import json
 import os
+import socket
 import ssl
 import threading
 import time
@@ -53,11 +54,28 @@ def call_servo(pin, position):
         app.logger.error(f"Servo call failed pin={pin}: {e}")
 
 
+class _ImplicitFTPS(ftplib.FTP_TLS):
+    """FTP_TLS subclass that wraps the socket in SSL immediately (implicit FTPS, port 990)."""
+    def connect(self, host='', port=0, timeout=-999, source_address=None):
+        if host:
+            self.host = host
+        if port > 0:
+            self.port = port
+        if timeout != -999:
+            self.timeout = timeout
+        sock = socket.create_connection((self.host, self.port), self.timeout)
+        self.sock = self.context.wrap_socket(sock, server_hostname=self.host)
+        self.af = self.sock.family
+        self.file = self.sock.makefile('r', encoding=self.encoding)
+        self.welcome = self.getresp()
+        return self.welcome
+
+
 def list_ftp_files(printer):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
-    ftp = ftplib.FTP_TLS(context=ctx)
+    ftp = _ImplicitFTPS(context=ctx)
     try:
         ftp.connect(printer['ip'], 990, timeout=10)
         ftp.login('bblp', printer['access_code'])
