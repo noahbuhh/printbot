@@ -636,9 +636,11 @@ app.get('/', (req, res) => {
             return;
           }
           document.getElementById('loopFileList').innerHTML = files.map(function(f) {
+            var name = f.name || f;
+            var url  = f.url  || '';
             return '<button type="button" class="list-group-item list-group-item-action list-group-item-dark mono py-2 px-3"'
-              + ' style="font-size:0.82rem" data-file="' + escHtml(f) + '">'
-              + '<i class="bi bi-file-earmark-zip me-2 text-muted"></i>' + escHtml(f)
+              + ' style="font-size:0.82rem" data-file="' + escHtml(name) + '" data-url="' + escHtml(url) + '">'
+              + '<i class="bi bi-file-earmark-zip me-2 text-muted"></i>' + escHtml(name)
               + '</button>';
           }).join('');
         })
@@ -655,7 +657,7 @@ app.get('/', (req, res) => {
         el.classList.remove('active');
       });
       btn.classList.add('active');
-      selectedLoopFile = btn.dataset.file;
+      selectedLoopFile = { name: btn.dataset.file, url: btn.dataset.url };
       document.getElementById('startLoopBtn').disabled = false;
     });
 
@@ -665,7 +667,7 @@ app.get('/', (req, res) => {
       fetch('/printer-monitor/printers/' + pid + '/loop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_name: selectedLoopFile })
+        body: JSON.stringify({ file_name: selectedLoopFile.name, file_url: selectedLoopFile.url })
       }).then(function(r) {
         if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'HTTP ' + r.status); });
         bootstrap.Modal.getInstance(document.getElementById('loopModal')).hide();

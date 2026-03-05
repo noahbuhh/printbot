@@ -81,26 +81,36 @@ def list_ftp_files(printer):
         ftp.login('bblp', printer['access_code'])
         ftp.prot_p()
 
-        # Try common Bambu paths; fall back to root
+        # Try common Bambu paths; track which one worked
         entries = []
+        found_path = ''
         for path in ['/sdcard', '/sdcard/', '']:
             try:
                 result = ftp.nlst(path) if path else ftp.nlst()
                 if result is not None:
                     entries = result
+                    found_path = path
                     break
             except ftplib.error_perm:
                 continue
 
+        print(f"[FTP] path='{found_path}' entries={entries}", flush=True)
         ftp.quit()
     except Exception as e:
         raise RuntimeError(f"FTP error: {e}")
 
+    # Return {name, url} so the frontend can pass the correct ftp:// URL
     files = []
     for entry in entries:
         name = entry.split('/')[-1] if '/' in entry else entry
-        if name.endswith('.3mf') or name.endswith('.gcode'):
-            files.append(name)
+        if not (name.endswith('.3mf') or name.endswith('.gcode')):
+            continue
+        # Build the ftp URL from the actual entry path returned by the server
+        if entry.startswith('/'):
+            url = f"ftp://{entry}"
+        else:
+            url = f"ftp:///{found_path.strip('/')}/{name}".replace('///', '/')
+        files.append({'name': name, 'url': url})
     return files
 
 
@@ -124,7 +134,9 @@ def send_print_command(printer, file_url, subtask_name):
     client = mqtt_clients.get(printer['id'])
     if client:
         client.publish(f"device/{printer['serial']}/request", json.dumps(payload))
-        app.logger.info(f"Loop print sent to {printer['id']}: {file_url}")
+        print(f"[LOOP] print sent → {printer['name']} serial={printer['serial']} url={file_url}", flush=True)
+    else:
+        print(f"[LOOP] ERROR no MQTT client for printer {printer['id']}", flush=True)
 
 
 def start_loop_timer(pid, gen, delay=300):
@@ -430,17 +442,20 @@ def get_files(pid):
         files = list_ftp_files(p)
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 502
-    return jsonify({'files': files})
+    return jsonify({'files': files})  # list of {name, url}
 
 
 @app.route('/printers/<pid>/loop', methods=['POST'])
 def start_loop(pid):
     data = request.get_json(force=True)
+    file_url  = data.get('file_url')
     file_name = data.get('file_name')
-    if not file_name:
-        return jsonify({'error': 'file_name required'}), 400
-    file_url = f"ftp:///sdcard/{file_name}"
-    subtask  = file_name.rsplit('.', 1)[0]
+    if not file_url and not file_name:
+        return jsonify({'error': 'file_url or file_name required'}), 400
+    if not file_url:
+        file_url = f"ftp:///sdcard/{file_name}"
+    subtask = (file_name or file_url.split('/')[-1]).rsplit('.', 1)[0]
+    print(f"[LOOP] start pid={pid} url={file_url}", flush=True)
 
     with config_lock:
         p = next((p for p in printers if p['id'] == pid), None)
