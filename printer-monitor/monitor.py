@@ -3,6 +3,7 @@ import json
 import os
 import socket
 import ssl
+import subprocess
 import threading
 import time
 import urllib.parse
@@ -29,6 +30,43 @@ live_state = {}
 
 # Map of printer_id -> mqtt client
 mqtt_clients = {}
+
+# Map of printer_id -> active ffmpeg Popen
+recording_procs = {}
+RECORDINGS_DIR = '/data/recordings'
+STREAM_URL = 'http://ustreamer:8080/?action=stream'
+
+
+def start_recording(pid, printer_name):
+    os.makedirs(RECORDINGS_DIR, exist_ok=True)
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    safe_name = ''.join(c if c.isalnum() or c in '-_' else '_' for c in printer_name)
+    filename = f"{safe_name}_{timestamp}.mp4"
+    filepath = os.path.join(RECORDINGS_DIR, filename)
+    try:
+        proc = subprocess.Popen(
+            ['ffmpeg', '-y', '-i', STREAM_URL,
+             '-vf', 'fps=5', '-c:v', 'libx264', '-crf', '28', '-preset', 'ultrafast',
+             filepath],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        recording_procs[pid] = proc
+        print(f"[REC] Started: {filename}", flush=True)
+        return filename
+    except Exception as e:
+        print(f"[REC] Failed to start ffmpeg: {e}", flush=True)
+        return None
+
+
+def stop_recording(pid):
+    proc = recording_procs.pop(pid, None)
+    if proc and proc.poll() is None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+        print(f"[REC] Stopped recording pid={pid}", flush=True)
 
 
 def load_config():
@@ -101,19 +139,14 @@ def list_ftp_files(printer):
         raise RuntimeError(f"FTP error: {e}")
 
     # Return {name, url} so the frontend can pass the correct ftp:// URL
+    # MQTT URL always needs /sdcard/ prefix — that is the printer's internal path
+    # regardless of where the FTP listing found the files.
     files = []
     for entry in entries:
         name = entry.split('/')[-1] if '/' in entry else entry
         if not (name.endswith('.3mf') or name.endswith('.gcode')):
             continue
-        # Build ftp:/// URL — encode spaces/special chars
-        if entry.startswith('/'):
-            path = entry
-        elif found_path:
-            path = '/' + found_path.strip('/') + '/' + name
-        else:
-            path = '/' + name
-        url = 'ftp://' + urllib.parse.quote(path, safe='/')
+        url = 'file:///sdcard/' + urllib.parse.quote(name, safe='')
         files.append({'name': name, 'url': url})
     return files
 
@@ -121,11 +154,15 @@ def list_ftp_files(printer):
 def send_print_command(printer, file_url, subtask_name):
     payload = {
         "print": {
-            "sequence_id": str(int(time.time())),
+            "sequence_id": "0",
             "command": "project_file",
             "param": "Metadata/plate_1.gcode",
             "url": file_url,
             "subtask_name": subtask_name,
+            "profile_id": "0",
+            "project_id": "0",
+            "subtask_id": "0",
+            "task_id": "0",
             "bed_type": "auto",
             "timelapse": False,
             "bed_leveling": True,
@@ -143,28 +180,117 @@ def send_print_command(printer, file_url, subtask_name):
         print(f"[LOOP] ERROR no MQTT client for printer {printer['id']}", flush=True)
 
 
-def start_loop_timer(pid, gen, delay=300):
-    def run():
-        deadline = time.time() + delay
-        while time.time() < deadline:
-            time.sleep(1)
-            with state_lock:
-                s = live_state.get(pid)
-                if s is None or not s.get('loop_enabled') or s.get('loop_gen') != gen:
-                    return
+def send_preheat_command(printer, temp):
+    payload = {
+        "print": {
+            "sequence_id": "0",
+            "command": "gcode_line",
+            "param": f"M140 S{int(temp)}\n",
+        }
+    }
+    client = mqtt_clients.get(printer['id'])
+    if client:
+        client.publish(f"device/{printer['serial']}/request", json.dumps(payload))
+        print(f"[PREHEAT] M140 S{temp} → {printer['name']}", flush=True)
+    else:
+        print(f"[PREHEAT] ERROR no MQTT client for printer {printer['id']}", flush=True)
+
+
+def _loop_tick(pid):
+    """Handle one preheat/print state-machine tick for a single printer."""
+    with config_lock:
+        printer = next((p for p in printers if p['id'] == pid), None)
+    if printer is None:
+        return
+
+    with state_lock:
+        s = live_state.get(pid)
+        if s is None or not s.get('loop_enabled'):
+            return
+        phase           = s.get('loop_phase')
+        gcode_state     = s.get('gcode_state')
+        bed_temp        = float(s.get('bed_temp') or 0)
+        preheat_enabled = s.get('loop_preheat_enabled', False)
+        preheat_temp    = float(s.get('loop_preheat_temp', 65))
+        preheat_minutes = float(s.get('loop_preheat_minutes', 5))
+
+    # ── FINISH + idle → start preheat or print ───────────────────────────────
+    if gcode_state == 'FINISH' and phase not in ('printing', 'preheating', 'preheated'):
         with state_lock:
             s = live_state.get(pid)
-            if s is None or not s.get('loop_enabled') or s.get('loop_gen') != gen:
+            if s is None or not s.get('loop_enabled') \
+                    or s.get('gcode_state') != 'FINISH' \
+                    or s.get('loop_phase') in ('printing', 'preheating', 'preheated'):
+                return
+            file_url        = s.get('loop_file')
+            subtask         = s.get('loop_subtask', 'loop_print')
+            preheat_enabled = s.get('loop_preheat_enabled', False)
+            preheat_temp    = float(s.get('loop_preheat_temp', 65))
+            preheat_minutes = float(s.get('loop_preheat_minutes', 5))
+            if preheat_enabled:
+                s['loop_phase']       = 'preheating'
+                s['preheat_ready_at'] = None
+            else:
+                s['loop_phase']   = 'printing'
+                s['loop_next_at'] = None
+
+        if preheat_enabled:
+            print(f"[LOOP] {printer['name']} preheating bed to {preheat_temp}°C "
+                  f"({preheat_minutes} min soak)", flush=True)
+            send_preheat_command(printer, preheat_temp)
+        elif file_url:
+            print(f"[LOOP] {printer['name']} triggering next print", flush=True)
+            send_print_command(printer, file_url, subtask)
+        return
+
+    # ── preheating → check if bed reached target ─────────────────────────────
+    if phase == 'preheating':
+        if bed_temp >= preheat_temp:
+            with state_lock:
+                s = live_state.get(pid)
+                if s:
+                    s['loop_phase']       = 'preheated'
+                    s['preheat_ready_at'] = time.time()
+            print(f"[LOOP] {printer['name']} bed at {bed_temp}°C — "
+                  f"soaking for {preheat_minutes} min", flush=True)
+        return
+
+    # ── preheated → wait soak time then print ────────────────────────────────
+    if phase == 'preheated':
+        with state_lock:
+            s = live_state.get(pid)
+            if s is None:
+                return
+            ready_at = s.get('preheat_ready_at') or time.time()
+            elapsed  = time.time() - ready_at
+            if elapsed < preheat_minutes * 60:
+                remaining = int((preheat_minutes * 60 - elapsed) / 60)
+                print(f"[LOOP] {printer['name']} soak {remaining} min remaining", flush=True)
                 return
             file_url = s.get('loop_file')
             subtask  = s.get('loop_subtask', 'loop_print')
             s['loop_phase']   = 'printing'
             s['loop_next_at'] = None
-        with config_lock:
-            printer = next((p for p in printers if p['id'] == pid), None)
-        if printer and file_url:
+
+        if file_url:
+            print(f"[LOOP] {printer['name']} soak done → starting print", flush=True)
             send_print_command(printer, file_url, subtask)
-    threading.Thread(target=run, daemon=True).start()
+
+
+def loop_watcher():
+    """Every 60 s: advance the preheat/print state machine for all loop-enabled printers."""
+    while True:
+        try:
+            time.sleep(60)
+            with state_lock:
+                active_pids = [pid for pid, s in live_state.items() if s.get('loop_enabled')]
+            for pid in active_pids:
+                try:
+                    _loop_tick(pid)
+                except Exception as e:
+                    print(f"[LOOP] tick error pid={pid}: {e}", flush=True)
+        except Exception as e:
+            print(f"[LOOP] watcher error (will retry): {e}", flush=True)
 
 
 def make_mqtt_client(printer):
@@ -188,7 +314,12 @@ def make_mqtt_client(printer):
             return
 
         print_data = payload.get('print', {})
-        loop_trigger = None
+
+        # Log command responses and errors from the printer
+        if 'command' in print_data or 'result' in print_data:
+            print(f"[MQTT] {printer['name']} response: {json.dumps(print_data)}", flush=True)
+        if 'hms' in print_data and print_data['hms']:
+            print(f"[MQTT] {printer['name']} HMS errors: {print_data['hms']}", flush=True)
 
         with state_lock:
             state = live_state.setdefault(pid, {
@@ -204,8 +335,14 @@ def make_mqtt_client(printer):
                 state['nozzle_temp'] = round(print_data['nozzle_temper'], 1)
             if 'mc_percent' in print_data:
                 state['mc_percent'] = round(float(print_data['mc_percent']), 1)
+                if (state['mc_percent'] >= 95
+                        and not state.get('recording')
+                        and (state.get('gcode_state') or '').upper() == 'RUNNING'):
+                    state['recording'] = True   # flag before releasing lock
             if 'mc_remaining_time' in print_data:
                 state['mc_remaining_time'] = int(print_data['mc_remaining_time'])
+            if 'hms' in print_data:
+                state['hms_errors'] = print_data['hms']  # list of {attr, code} or []
             if 'gcode_state' in print_data:
                 prev_gstate = state.get('gcode_state')
                 new_gstate = print_data['gcode_state']
@@ -223,14 +360,28 @@ def make_mqtt_client(printer):
                       or (not new_u        and prev_u in ACTIVE)
                 if ended and state.get('loop_enabled'):
                     state['loop_phase']   = 'waiting'
-                    state['loop_next_at'] = time.time() + 300
-                    loop_trigger = (pid, state.get('loop_gen', 0))
+                    state['loop_next_at'] = None
+                if ended and state.get('recording'):
+                    state['recording']      = False
+                    state['recording_file'] = None
 
             bed_temp = state['bed_temp']
             current_servo_open = state['servo_open']
+            should_start_rec = state.get('recording') and pid not in recording_procs
 
-        if loop_trigger:
-            start_loop_timer(loop_trigger[0], loop_trigger[1], 300)
+        # Start recording outside the lock
+        if should_start_rec:
+            filename = start_recording(pid, printer['name'])
+            with state_lock:
+                if pid in live_state:
+                    live_state[pid]['recording_file'] = filename
+
+        # Stop recording outside the lock when print ended
+        if 'gcode_state' in print_data:
+            with state_lock:
+                still_recording = live_state.get(pid, {}).get('recording', False)
+            if not still_recording and pid in recording_procs:
+                stop_recording(pid)
 
         if bed_temp is None:
             return
@@ -301,11 +452,18 @@ def connect_printer(printer):
             'loop_phase': None,
             'loop_next_at': None,
             'loop_gen': 0,
+            'loop_preheat_enabled': False,
+            'loop_preheat_temp': 65,
+            'loop_preheat_minutes': 5,
+            'preheat_ready_at': None,
+            'recording': False,
+            'recording_file': None,
         }
     mqtt_clients[pid] = make_mqtt_client(printer)
 
 
 def disconnect_printer(pid):
+    stop_recording(pid)
     client = mqtt_clients.pop(pid, None)
     if client:
         client.loop_stop()
@@ -352,6 +510,9 @@ def add_printer():
         'gpio_pin': int(data['gpio_pin']),
         'open_position': int(data.get('open_position', 1900)),
         'close_position': int(data.get('close_position', 2500)),
+        'preheat_enabled': bool(data.get('preheat_enabled', False)),
+        'preheat_temp': float(data.get('preheat_temp', 65)),
+        'preheat_minutes': float(data.get('preheat_minutes', 5)),
     }
     with config_lock:
         printers.append(printer)
@@ -382,12 +543,15 @@ def update_printer(pid):
         if printer is None:
             return jsonify({'error': 'Not found'}), 404
         for field in ('name', 'ip', 'serial', 'access_code',
-                      'temp_threshold', 'gpio_pin', 'open_position', 'close_position'):
+                      'temp_threshold', 'gpio_pin', 'open_position', 'close_position',
+                      'preheat_enabled', 'preheat_temp', 'preheat_minutes'):
             if field in data:
-                if field == 'temp_threshold':
+                if field in ('temp_threshold', 'preheat_temp', 'preheat_minutes'):
                     printer[field] = float(data[field])
                 elif field in ('gpio_pin', 'open_position', 'close_position'):
                     printer[field] = int(data[field])
+                elif field == 'preheat_enabled':
+                    printer[field] = bool(data[field])
                 else:
                     printer[field] = data[field]
                 if field in ('ip', 'serial', 'access_code'):
@@ -449,6 +613,25 @@ def get_files(pid):
     return jsonify({'files': files})  # list of {name, url}
 
 
+@app.route('/printers/<pid>/print', methods=['POST'])
+def start_print(pid):
+    data = request.get_json(force=True)
+    file_url  = data.get('file_url')
+    file_name = data.get('file_name')
+    if not file_url and not file_name:
+        return jsonify({'error': 'file_url or file_name required'}), 400
+    if not file_url:
+        file_url = f"ftp:///sdcard/{file_name}"
+    subtask = (file_name or file_url.split('/')[-1]).rsplit('.', 1)[0]
+    with config_lock:
+        p = next((p for p in printers if p['id'] == pid), None)
+    if p is None:
+        return jsonify({'error': 'Not found'}), 404
+    print(f"[PRINT] manual start pid={pid} url={file_url}", flush=True)
+    send_print_command(p, file_url, subtask)
+    return jsonify({'status': 'print_started', 'file': file_url})
+
+
 @app.route('/printers/<pid>/loop', methods=['POST'])
 def start_loop(pid):
     data = request.get_json(force=True)
@@ -459,7 +642,13 @@ def start_loop(pid):
     if not file_url:
         file_url = f"ftp:///sdcard/{file_name}"
     subtask = (file_name or file_url.split('/')[-1]).rsplit('.', 1)[0]
-    print(f"[LOOP] start pid={pid} url={file_url}", flush=True)
+
+    preheat_enabled = bool(data.get('preheat_enabled', False))
+    preheat_temp    = float(data.get('preheat_temp', 65))
+    preheat_minutes = float(data.get('preheat_minutes', 5))
+
+    print(f"[LOOP] start pid={pid} url={file_url} preheat={preheat_enabled} "
+          f"temp={preheat_temp} mins={preheat_minutes}", flush=True)
 
     with config_lock:
         p = next((p for p in printers if p['id'] == pid), None)
@@ -471,14 +660,28 @@ def start_loop(pid):
         if s is None:
             return jsonify({'error': 'Printer not connected'}), 409
         gen = s.get('loop_gen', 0) + 1
-        s['loop_enabled'] = True
-        s['loop_file']    = file_url
-        s['loop_subtask'] = subtask
-        s['loop_gen']     = gen
-        s['loop_phase']   = 'printing'
-        s['loop_next_at'] = None
+        s['loop_enabled']         = True
+        s['loop_file']            = file_url
+        s['loop_subtask']         = subtask
+        s['loop_gen']             = gen
+        s['loop_preheat_enabled'] = preheat_enabled
+        s['loop_preheat_temp']    = preheat_temp
+        s['loop_preheat_minutes'] = preheat_minutes
+        if preheat_enabled:
+            s['loop_phase']       = 'preheating'
+            s['preheat_ready_at'] = None
+            s['loop_next_at']     = None
+        else:
+            s['loop_phase']   = 'printing'
+            s['loop_next_at'] = None
 
-    send_print_command(p, file_url, subtask)
+    if preheat_enabled:
+        print(f"[LOOP] {p['name']} preheating bed to {preheat_temp}°C "
+              f"({preheat_minutes} min soak)", flush=True)
+        send_preheat_command(p, preheat_temp)
+    else:
+        send_print_command(p, file_url, subtask)
+
     return jsonify({'status': 'loop_started', 'file': file_url})
 
 
@@ -497,6 +700,35 @@ def stop_loop(pid):
     return jsonify({'status': 'loop_stopped'})
 
 
+@app.route('/recordings', methods=['GET'])
+def list_recordings():
+    if not os.path.exists(RECORDINGS_DIR):
+        return jsonify([])
+    files = []
+    for name in sorted(os.listdir(RECORDINGS_DIR), reverse=True):
+        if not name.endswith('.mp4'):
+            continue
+        path = os.path.join(RECORDINGS_DIR, name)
+        stat = os.stat(path)
+        files.append({'name': name, 'size': stat.st_size, 'mtime': stat.st_mtime})
+    return jsonify(files)
+
+
+@app.route('/recordings/<path:filename>', methods=['GET'])
+def serve_recording(filename):
+    from flask import send_from_directory
+    return send_from_directory(RECORDINGS_DIR, filename)
+
+
+@app.route('/recordings/<path:filename>', methods=['DELETE'])
+def delete_recording(filename):
+    path = os.path.join(RECORDINGS_DIR, filename)
+    if not os.path.exists(path):
+        return jsonify({'error': 'Not found'}), 404
+    os.remove(path)
+    return jsonify({'status': 'deleted'})
+
+
 # ── Startup ─────────────────────────────────────────────────────────────────
 
 def init():
@@ -505,6 +737,7 @@ def init():
         printers.extend(loaded)
     for p in loaded:
         connect_printer(p)
+    threading.Thread(target=loop_watcher, daemon=True).start()
 
 
 if __name__ == '__main__':

@@ -276,8 +276,27 @@ app.get('/', (req, res) => {
         </div>
         <div class="modal-body">
           <input type="hidden" id="loopPid">
-          <div id="loopFileList" class="list-group">
+          <div id="loopFileList" class="list-group mb-3">
             <span class="text-muted fst-italic p-1">Loading files…</span>
+          </div>
+          <hr style="border-color:#1e2030">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="loopPreheatEnabled">
+            <label class="form-check-label" for="loopPreheatEnabled">
+              <i class="bi bi-thermometer-half me-1"></i>Vorheizen vor jedem Druck
+            </label>
+          </div>
+          <div id="loopPreheatOptions" style="display:none">
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">Betttemperatur (°C)</label>
+                <input type="number" class="form-control form-control-sm" id="loopPreheatTemp" value="65" min="20" max="120">
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">Einweichzeit (Min)</label>
+                <input type="number" class="form-control form-control-sm" id="loopPreheatMinutes" value="5" min="0" max="60">
+              </div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
@@ -857,13 +876,25 @@ app.get('/', (req, res) => {
       document.getElementById('startLoopBtn').disabled = false;
     });
 
+    document.getElementById('loopPreheatEnabled').addEventListener('change', function() {
+      document.getElementById('loopPreheatOptions').style.display = this.checked ? '' : 'none';
+    });
+
     document.getElementById('startLoopBtn').addEventListener('click', function() {
       var pid = document.getElementById('loopPid').value;
       if (!selectedLoopFile || !pid) return;
+      var preheatEnabled = document.getElementById('loopPreheatEnabled').checked;
+      var body = {
+        file_name: selectedLoopFile.name,
+        file_url:  selectedLoopFile.url,
+        preheat_enabled: preheatEnabled,
+        preheat_temp:    parseFloat(document.getElementById('loopPreheatTemp').value) || 65,
+        preheat_minutes: parseFloat(document.getElementById('loopPreheatMinutes').value) || 5
+      };
       fetch('/printer-monitor/printers/' + pid + '/loop', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_name: selectedLoopFile.name, file_url: selectedLoopFile.url })
+        body: JSON.stringify(body)
       }).then(function(r) {
         if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'HTTP ' + r.status); });
         bootstrap.Modal.getInstance(document.getElementById('loopModal')).hide();
