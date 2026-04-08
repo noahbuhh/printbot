@@ -1,7 +1,7 @@
 {
-  "name": "printbot",
+  "name": "autoprint",
   "version": "0.0.1",
-  "description": "A simple automated printer",
+  "description": "Automated 3D print management",
   "scripts": {
     "publish": "balena push g_noah_weers/printbot",
     "test": "echo \"Error: no test specified\" && exit 1"

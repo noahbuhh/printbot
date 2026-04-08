@@ -613,6 +613,38 @@ def get_files(pid):
     return jsonify({'files': files})  # list of {name, url}
 
 
+@app.route('/printers/<pid>/files/<filename>', methods=['DELETE'])
+def delete_file(pid, filename):
+    with config_lock:
+        p = next((p for p in printers if p['id'] == pid), None)
+    if p is None:
+        return jsonify({'error': 'Not found'}), 404
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ftp = _ImplicitFTPS(context=ctx)
+    try:
+        ftp.connect(p['ip'], 990, timeout=10)
+        ftp.login('bblp', p['access_code'])
+        ftp.prot_p()
+        # Try common paths
+        deleted = False
+        for path_prefix in ['/sdcard/', '']:
+            try:
+                ftp.delete(path_prefix + filename)
+                deleted = True
+                break
+            except ftplib.error_perm:
+                continue
+        ftp.quit()
+        if not deleted:
+            return jsonify({'error': f'File not found: {filename}'}), 404
+    except Exception as e:
+        return jsonify({'error': f'FTP delete error: {e}'}), 502
+    print(f"[FTP] deleted file '{filename}' from printer {pid}", flush=True)
+    return jsonify({'status': 'deleted', 'file': filename})
+
+
 @app.route('/printers/<pid>/print', methods=['POST'])
 def start_print(pid):
     data = request.get_json(force=True)

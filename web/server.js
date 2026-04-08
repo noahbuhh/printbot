@@ -7,52 +7,85 @@ app.get('/', (req, res) => {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Printbot</title>
+  <title>Autoprint</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/darkly/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <style>
-    body { background: #0a0b0e; font-family: 'Inter', sans-serif; }
-    .mono { font-family: 'JetBrains Mono', monospace; font-weight: 500; }
-    .card { background: #111318; border: 1px solid #1e2030; }
-    .card-header { background: #111318; border-bottom: 1px solid #1e2030; }
-    .card-footer { background: #111318; border-top: 1px solid #1e2030; }
-    .modal-content { background: #111318; border: 1px solid #1e2030; }
-    .modal-header { border-bottom: 1px solid #1e2030; }
-    .modal-footer { border-top: 1px solid #1e2030; }
+    :root {
+      --cy-bg: #05060a; --cy-surface: #0a0d14; --cy-border: #0f1923;
+      --cy-cyan: #00f0ff; --cy-magenta: #ff2d95; --cy-yellow: #ffe156;
+      --cy-green: #39ff14; --cy-text: #c8d6e5; --cy-dim: #4a5568;
+    }
+    body { background: var(--cy-bg); font-family: 'Rajdhani', sans-serif; color: var(--cy-text); }
+    .mono { font-family: 'Share Tech Mono', monospace; font-weight: 500; }
+    .card { background: var(--cy-surface); border: 1px solid var(--cy-border); box-shadow: 0 0 15px rgba(0,240,255,0.03); }
+    .card-header { background: linear-gradient(90deg, rgba(0,240,255,0.05), transparent); border-bottom: 1px solid var(--cy-border); font-family: 'Orbitron', monospace; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+    .card-footer { background: var(--cy-surface); border-top: 1px solid var(--cy-border); }
+    .modal-content { background: var(--cy-surface); border: 1px solid var(--cy-cyan); box-shadow: 0 0 30px rgba(0,240,255,0.1); }
+    .modal-header { border-bottom: 1px solid var(--cy-border); font-family: 'Orbitron', monospace; }
+    .modal-footer { border-top: 1px solid var(--cy-border); }
     .form-control, .form-select {
-      background: #0d0f14; border-color: #1e2030; color: #e0e0e0;
+      background: var(--cy-bg); border-color: var(--cy-border); color: var(--cy-text);
+      font-family: 'Share Tech Mono', monospace; font-size: 0.9rem;
     }
     .form-control:focus, .form-select:focus {
-      background: #0d0f14; border-color: #375a7f; color: #fff;
-      box-shadow: 0 0 0 0.2rem rgba(55,90,127,0.25);
+      background: var(--cy-bg); border-color: var(--cy-cyan); color: #fff;
+      box-shadow: 0 0 8px rgba(0,240,255,0.15);
     }
-    .form-control::placeholder { color: #555; }
-    .form-range { accent-color: #375a7f; }
-    .printer-running { border-left: 3px solid #00bc8c !important; }
-    .printer-finish  { border-left: 3px solid #f39c12 !important; }
-    .printer-idle    { border-left: 3px solid #555 !important; }
-    .printer-unknown { border-left: 3px solid #333 !important; }
+    .form-control::placeholder { color: var(--cy-dim); }
+    .form-range { accent-color: var(--cy-cyan); }
+    .printer-running { border-left: 3px solid var(--cy-green) !important; box-shadow: 0 0 12px rgba(57,255,20,0.08); }
+    .printer-finish  { border-left: 3px solid var(--cy-yellow) !important; box-shadow: 0 0 12px rgba(255,225,86,0.08); }
+    .printer-idle    { border-left: 3px solid var(--cy-dim) !important; }
+    .printer-unknown { border-left: 3px solid #1a1a2e !important; }
     .add-toggle { cursor: pointer; user-select: none; }
+    .btn-outline-primary { border-color: var(--cy-cyan); color: var(--cy-cyan); }
+    .btn-outline-primary:hover { background: rgba(0,240,255,0.12); color: var(--cy-cyan); border-color: var(--cy-cyan); }
+    .btn-outline-danger { border-color: var(--cy-magenta); color: var(--cy-magenta); }
+    .btn-outline-danger:hover { background: rgba(255,45,149,0.12); color: var(--cy-magenta); border-color: var(--cy-magenta); }
+    .btn-outline-warning { border-color: var(--cy-yellow); color: var(--cy-yellow); }
+    .btn-outline-warning:hover { background: rgba(255,225,86,0.12); color: var(--cy-yellow); border-color: var(--cy-yellow); }
+    .btn-outline-success { border-color: var(--cy-green); color: var(--cy-green); }
+    .btn-outline-success:hover { background: rgba(57,255,20,0.12); color: var(--cy-green); border-color: var(--cy-green); }
+    .btn-outline-secondary { border-color: var(--cy-dim); color: var(--cy-dim); }
+    .btn-outline-secondary:hover { background: rgba(74,85,104,0.15); color: var(--cy-text); }
+    .btn-primary { background: linear-gradient(135deg, #00b4d8, #0077b6); border: none; }
+    .btn-primary:hover { background: linear-gradient(135deg, #00d4ff, #0099e6); }
+    .btn-success { background: linear-gradient(135deg, #2d6a4f, #40916c); border: none; }
+    .btn-danger { background: linear-gradient(135deg, #6b1a1a, #a02020); border: none; }
+    .text-success { color: var(--cy-green) !important; }
+    .text-warning { color: var(--cy-yellow) !important; }
+    .text-danger { color: var(--cy-magenta) !important; }
+    .text-info { color: var(--cy-cyan) !important; }
+    .text-muted { color: var(--cy-dim) !important; }
+    .badge { font-family: 'Share Tech Mono', monospace; font-weight: 500; }
+    .table { --bs-table-bg: transparent; color: var(--cy-text); }
+    hr { border-color: var(--cy-border) !important; }
     @keyframes pulse {
       0%,100% { opacity:1; transform:scale(1); }
       50%      { opacity:.5; transform:scale(.8); }
     }
+    @keyframes pulseGlow {
+      0%,100% { box-shadow: 0 0 5px rgba(0,240,255,0.1); }
+      50%      { box-shadow: 0 0 15px rgba(0,240,255,0.2); }
+    }
     .dot-pulse { display:inline-block; width:8px; height:8px; border-radius:50%;
-                 background:#00bc8c; animation:pulse 1.5s ease-in-out infinite; }
+                 background: var(--cy-green); animation:pulse 1.5s ease-in-out infinite; }
     .dot-pulse-sm { width:7px; height:7px; }
   </style>
 </head>
 <body>
 
   <!-- Navbar -->
-  <nav class="navbar navbar-dark" style="background:#0d0f14;border-bottom:1px solid #1e2030">
+  <nav class="navbar navbar-dark" style="background:linear-gradient(180deg,rgba(0,240,255,0.03),var(--cy-bg));border-bottom:1px solid var(--cy-border);position:relative">
+  <div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cy-cyan),var(--cy-magenta),transparent)"></div>
     <div class="container-fluid px-4">
       <span class="navbar-brand d-flex align-items-center gap-2 mb-0">
-        <i class="bi bi-printer-fill fs-5"></i>
-        <span class="mono fw-bold fs-5">PRINTBOT</span>
-        <span class="text-muted" style="font-size:0.72rem;letter-spacing:0.06em">3D PRINT MONITOR</span>
+        <i class="bi bi-printer-fill fs-5" style="color:var(--cy-cyan)"></i>
+        <span style="font-family:'Orbitron',monospace;font-weight:900;font-size:1.1rem;letter-spacing:0.15em;background:linear-gradient(90deg,var(--cy-cyan),var(--cy-magenta));-webkit-background-clip:text;-webkit-text-fill-color:transparent">AUTOPRINT</span>
+        <span style="font-size:0.72rem;letter-spacing:0.06em;color:var(--cy-dim)">3D PRINT MONITOR</span>
       </span>
       <span class="d-flex align-items-center gap-2">
         <span class="dot-pulse"></span>
@@ -106,7 +139,7 @@ app.get('/', (req, res) => {
                style="width:100%;max-height:480px;object-fit:contain;display:block;transition:transform 0.2s;transform-origin:center center"
                onerror="this.style.display='none';document.getElementById('camErr').style.display='block'">
         </div>
-        <div id="camErr" style="display:none;padding:1rem;color:#666;font-size:0.85rem">
+        <div id="camErr" style="display:none;padding:1rem;color:var(--cy-dim);font-size:0.85rem">
           <i class="bi bi-camera-video-off me-2"></i>Camera not available
         </div>
       </div>
@@ -279,7 +312,7 @@ app.get('/', (req, res) => {
           <div id="loopFileList" class="list-group mb-3">
             <span class="text-muted fst-italic p-1">Loading files…</span>
           </div>
-          <hr style="border-color:#1e2030">
+          <hr style="border-color:var(--cy-border)">
           <div class="form-check form-switch mb-2">
             <input class="form-check-input" type="checkbox" id="loopPreheatEnabled">
             <label class="form-check-label" for="loopPreheatEnabled">
@@ -460,9 +493,9 @@ app.get('/', (req, res) => {
     }
     function tempColor(val) {
       if (val == null) return '';
-      if (val < 30) return 'color:#00bc8c';
-      if (val < 60) return 'color:#f39c12';
-      return 'color:#e74c3c';
+      if (val < 30) return 'color:var(--cy-green)';
+      if (val < 60) return 'color:var(--cy-yellow)';
+      return 'color:var(--cy-magenta)';
     }
     function tempDisplay(val) {
       if (val == null) return '<span class="text-muted">--</span>';
@@ -487,13 +520,13 @@ app.get('/', (req, res) => {
       if (rate === null) return '';
       var abs = Math.abs(rate).toFixed(1);
       if (rate < -0.5) return '<div class="d-flex align-items-center gap-2 mb-2">'
-        + '<i class="bi bi-arrow-down-short" style="color:#4dabf7"></i>'
+        + '<i class="bi bi-arrow-down-short" style="color:var(--cy-cyan)"></i>'
         + '<span class="small text-muted">Cooling</span>'
-        + '<span class="mono" style="color:#4dabf7">' + abs + '°/min</span></div>';
+        + '<span class="mono" style="color:var(--cy-cyan)">' + abs + '°/min</span></div>';
       if (rate > 0.5) return '<div class="d-flex align-items-center gap-2 mb-2">'
-        + '<i class="bi bi-arrow-up-short" style="color:#ff6b6b"></i>'
+        + '<i class="bi bi-arrow-up-short" style="color:var(--cy-magenta)"></i>'
         + '<span class="small text-muted">Heating</span>'
-        + '<span class="mono" style="color:#ff6b6b">' + abs + '°/min</span></div>';
+        + '<span class="mono" style="color:var(--cy-magenta)">' + abs + '°/min</span></div>';
       return '<div class="d-flex align-items-center gap-2 mb-2">'
         + '<i class="bi bi-dash text-muted"></i>'
         + '<span class="small text-muted">Rate</span>'
@@ -502,9 +535,9 @@ app.get('/', (req, res) => {
     function makeHmsHtml(hms) {
       if (!hms || !hms.length) return '';
       return '<div class="d-flex align-items-center gap-2 mt-1 p-1 rounded" '
-        + 'style="background:#2a0a0a;border:1px solid #6b1a1a;font-size:0.78rem">'
-        + '<i class="bi bi-exclamation-triangle-fill" style="color:#e74c3c"></i>'
-        + '<span style="color:#e74c3c">HMS Error</span>'
+        + 'style="background:rgba(255,45,149,0.08);border:1px solid rgba(255,45,149,0.3);font-size:0.78rem">'
+        + '<i class="bi bi-exclamation-triangle-fill" style="color:var(--cy-magenta)"></i>'
+        + '<span style="color:var(--cy-magenta)">HMS Error</span>'
         + '<span class="mono text-muted ms-1">'
         + hms.map(function(e) { return '0x' + (e.code || 0).toString(16).toUpperCase(); }).join(', ')
         + '</span>'
@@ -529,8 +562,8 @@ app.get('/', (req, res) => {
         var sec  = secs % 60;
         var cd   = m + ':' + (sec < 10 ? '0' : '') + sec;
         return '<div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.78rem">'
-          + '<i class="bi bi-hourglass-split" style="color:#4dabf7"></i>'
-          + '<span class="mono" style="color:#4dabf7">' + escHtml(name) + '</span>'
+          + '<i class="bi bi-hourglass-split" style="color:var(--cy-cyan)"></i>'
+          + '<span class="mono" style="color:var(--cy-cyan)">' + escHtml(name) + '</span>'
           + '<span class="text-muted">next in ' + cd + '</span>'
           + '</div>';
       }
@@ -538,22 +571,22 @@ app.get('/', (req, res) => {
         var target = (p && p.preheat_temp) ? p.preheat_temp + '°C' : '…';
         var cur    = s.bed_temp != null ? s.bed_temp + '°C' : '--';
         return '<div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.78rem">'
-          + '<i class="bi bi-thermometer-high" style="color:#ff6b6b"></i>'
-          + '<span style="color:#ff6b6b">Preheating</span>'
+          + '<i class="bi bi-thermometer-high" style="color:var(--cy-magenta)"></i>'
+          + '<span style="color:var(--cy-magenta)">Preheating</span>'
           + '<span class="mono text-muted">' + cur + ' → ' + target + '</span>'
           + '</div>';
       }
       if (phase === 'preheated') {
         var mins = (p && p.preheat_minutes) ? p.preheat_minutes + ' min' : '…';
         return '<div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.78rem">'
-          + '<i class="bi bi-hourglass-split" style="color:#f39c12"></i>'
-          + '<span style="color:#f39c12">Soaking</span>'
+          + '<i class="bi bi-hourglass-split" style="color:var(--cy-yellow)"></i>'
+          + '<span style="color:var(--cy-yellow)">Soaking</span>'
           + '<span class="mono text-muted">' + escHtml(mins) + '</span>'
           + '</div>';
       }
       return '<div class="d-flex align-items-center gap-2 mt-1" style="font-size:0.78rem">'
-        + '<i class="bi bi-arrow-repeat" style="color:#00bc8c"></i>'
-        + '<span class="mono" style="color:#00bc8c">' + escHtml(name) + '</span>'
+        + '<i class="bi bi-arrow-repeat" style="color:var(--cy-green)"></i>'
+        + '<span class="mono" style="color:var(--cy-green)">' + escHtml(name) + '</span>'
         + '</div>';
     }
 
@@ -588,11 +621,11 @@ app.get('/', (req, res) => {
         + '<span id="nozzle-' + pid + '">' + tempDisplay(s.nozzle_temp) + '</span>'
         + '</div>'
         + '<div id="rate-' + pid + '">' + makeRateHtml(p.id) + '</div>'
-        + '<div class="mb-1" style="font-size:0.78rem;color:#666">'
+        + '<div class="mb-1" style="font-size:0.78rem;color:var(--cy-dim)">'
         + '<i class="bi bi-cpu"></i> GPIO' + escHtml(String(p.gpio_pin))
         + ' &nbsp;<i class="bi bi-arrows-angle-contract"></i> ' + escHtml(String(p.temp_threshold)) + 'C'
         + '</div>'
-        + '<div class="mb-2" style="font-size:0.78rem;color:#666">'
+        + '<div class="mb-2" style="font-size:0.78rem;color:var(--cy-dim)">'
         + 'Open ' + escHtml(String(p.open_position)) + 'us / Close ' + escHtml(String(p.close_position)) + 'us'
         + '</div>'
         + '<div id="servo-' + pid + '">' + makeServoHtml(s.servo_open) + '</div>'
@@ -853,10 +886,13 @@ app.get('/', (req, res) => {
           document.getElementById('loopFileList').innerHTML = files.map(function(f) {
             var name = f.name || f;
             var url  = f.url  || '';
-            return '<button type="button" class="list-group-item list-group-item-action list-group-item-dark mono py-2 px-3"'
-              + ' style="font-size:0.82rem" data-file="' + escHtml(name) + '" data-url="' + escHtml(url) + '">'
+            return '<div class="list-group-item list-group-item-dark d-flex align-items-center gap-2 py-1 px-3" style="font-size:0.82rem">'
+              + '<button type="button" class="btn btn-link text-decoration-none mono p-0 flex-grow-1 text-start" style="color:var(--cy-text);font-size:0.82rem" data-file="' + escHtml(name) + '" data-url="' + escHtml(url) + '">'
               + '<i class="bi bi-file-earmark-zip me-2 text-muted"></i>' + escHtml(name)
-              + '</button>';
+              + '</button>'
+              + '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" data-delete-file="' + escHtml(name) + '" title="Delete file">'
+              + '<i class="bi bi-trash3" style="font-size:0.7rem"></i></button>'
+              + '</div>';
           }).join('');
         })
         .catch(function(err) {
@@ -866,12 +902,24 @@ app.get('/', (req, res) => {
     }
 
     document.getElementById('loopFileList').addEventListener('click', function(e) {
+      var delBtn = e.target.closest('[data-delete-file]');
+      if (delBtn) {
+        e.stopPropagation();
+        var fname = delBtn.dataset.deleteFile;
+        var pid = document.getElementById('loopPid').value;
+        if (!confirm('Delete "' + fname + '" from printer?')) return;
+        fetch('/printer-monitor/printers/' + pid + '/files/' + encodeURIComponent(fname), { method: 'DELETE' })
+          .then(function(r) { if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Error'); }); })
+          .then(function() { showLoopModal(pid); })
+          .catch(function(err) { alert('Delete failed: ' + err.message); });
+        return;
+      }
       var btn = e.target.closest('[data-file]');
       if (!btn) return;
-      document.querySelectorAll('#loopFileList .list-group-item').forEach(function(el) {
-        el.classList.remove('active');
+      document.querySelectorAll('#loopFileList [data-file]').forEach(function(el) {
+        el.closest('.list-group-item').classList.remove('active');
       });
-      btn.classList.add('active');
+      btn.closest('.list-group-item').classList.add('active');
       selectedLoopFile = { name: btn.dataset.file, url: btn.dataset.url };
       document.getElementById('startLoopBtn').disabled = false;
     });
@@ -930,10 +978,13 @@ app.get('/', (req, res) => {
           document.getElementById('printFileList').innerHTML = files.map(function(f) {
             var name = f.name || f;
             var url  = f.url  || '';
-            return '<button type="button" class="list-group-item list-group-item-action list-group-item-dark mono py-2 px-3"'
-              + ' style="font-size:0.82rem" data-file="' + escHtml(name) + '" data-url="' + escHtml(url) + '">'
+            return '<div class="list-group-item list-group-item-dark d-flex align-items-center gap-2 py-1 px-3" style="font-size:0.82rem">'
+              + '<button type="button" class="btn btn-link text-decoration-none mono p-0 flex-grow-1 text-start" style="color:var(--cy-text);font-size:0.82rem" data-file="' + escHtml(name) + '" data-url="' + escHtml(url) + '">'
               + '<i class="bi bi-file-earmark-zip me-2 text-muted"></i>' + escHtml(name)
-              + '</button>';
+              + '</button>'
+              + '<button type="button" class="btn btn-outline-danger btn-sm py-0 px-1" data-delete-file="' + escHtml(name) + '" title="Delete file">'
+              + '<i class="bi bi-trash3" style="font-size:0.7rem"></i></button>'
+              + '</div>';
           }).join('');
         })
         .catch(function(err) {
@@ -943,12 +994,24 @@ app.get('/', (req, res) => {
     }
 
     document.getElementById('printFileList').addEventListener('click', function(e) {
+      var delBtn = e.target.closest('[data-delete-file]');
+      if (delBtn) {
+        e.stopPropagation();
+        var fname = delBtn.dataset.deleteFile;
+        var pid = document.getElementById('printPid').value;
+        if (!confirm('Delete "' + fname + '" from printer?')) return;
+        fetch('/printer-monitor/printers/' + pid + '/files/' + encodeURIComponent(fname), { method: 'DELETE' })
+          .then(function(r) { if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Error'); }); })
+          .then(function() { showPrintModal(pid); })
+          .catch(function(err) { alert('Delete failed: ' + err.message); });
+        return;
+      }
       var btn = e.target.closest('[data-file]');
       if (!btn) return;
-      document.querySelectorAll('#printFileList .list-group-item').forEach(function(el) {
-        el.classList.remove('active');
+      document.querySelectorAll('#printFileList [data-file]').forEach(function(el) {
+        el.closest('.list-group-item').classList.remove('active');
       });
-      btn.classList.add('active');
+      btn.closest('.list-group-item').classList.add('active');
       selectedPrintFile = { name: btn.dataset.file, url: btn.dataset.url };
       document.getElementById('confirmPrintBtn').disabled = false;
     });

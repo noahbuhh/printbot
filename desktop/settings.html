@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settings</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #111318;
+      color: #e0e0e0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    h2 { font-size: 15px; font-weight: 600; color: #fff; }
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 12px; color: #888; }
+    input[type="text"] {
+      width: 100%;
+      padding: 7px 10px;
+      background: #1c1f26;
+      border: 1px solid #2e3240;
+      border-radius: 6px;
+      color: #e0e0e0;
+      font-size: 13px;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #5c7cfa; }
+    .mode-row { display: flex; gap: 8px; }
+    .mode-btn {
+      flex: 1;
+      padding: 6px 0;
+      background: #1c1f26;
+      border: 1px solid #2e3240;
+      border-radius: 6px;
+      color: #888;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .mode-btn.active { background: #5c7cfa22; border-color: #5c7cfa; color: #5c7cfa; }
+    .mode-btn:hover:not(.active) { border-color: #444; color: #ccc; }
+    .row { display: flex; gap: 10px; justify-content: flex-end; margin-top: 4px; }
+    button {
+      padding: 7px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #cancelBtn { background: #2e3240; color: #ccc; }
+    #cancelBtn:hover { background: #383d4e; }
+    #saveBtn { background: #5c7cfa; color: #fff; }
+    #saveBtn:hover { background: #4a6cf7; }
+    .hint { font-size: 11px; color: #555; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h2>Autoprint Settings</h2>
+
+  <div class="field">
+    <label for="piUrl">Local URL (LAN)</label>
+    <input type="text" id="piUrl" placeholder="http://192.168.178.79" />
+  </div>
+
+  <div class="field">
+    <label for="remoteUrl">Remote URL (Cloudflare Tunnel)</label>
+    <input type="text" id="remoteUrl" placeholder="https://yourname.trycloudflare.com" />
+  </div>
+
+  <div class="field">
+    <label>Connection Mode</label>
+    <div class="mode-row">
+      <div class="mode-btn" data-mode="auto">Auto</div>
+      <div class="mode-btn" data-mode="local">Local only</div>
+      <div class="mode-btn" data-mode="remote">Remote only</div>
+    </div>
+    <span class="hint">Auto tries local first, falls back to remote if unreachable.</span>
+  </div>
+
+  <div class="row">
+    <button id="cancelBtn">Cancel</button>
+    <button id="saveBtn">Save</button>
+  </div>
+
+  <script>
+    const api = window.electronAPI
+    let selectedMode = 'auto'
+
+    api.getConfig().then(cfg => {
+      document.getElementById('piUrl').value     = cfg.piUrl     || ''
+      document.getElementById('remoteUrl').value = cfg.remoteUrl || ''
+      selectedMode = cfg.connectionMode || 'auto'
+      updateModeButtons()
+    })
+
+    function updateModeButtons() {
+      document.querySelectorAll('.mode-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === selectedMode)
+      })
+    }
+
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        selectedMode = btn.dataset.mode
+        updateModeButtons()
+      })
+    })
+
+    document.getElementById('saveBtn').addEventListener('click', async () => {
+      const piUrl     = document.getElementById('piUrl').value.trim()
+      const remoteUrl = document.getElementById('remoteUrl').value.trim()
+      if (!piUrl) return
+      await api.saveConfig({ piUrl, remoteUrl, connectionMode: selectedMode })
+      window.close()
+    })
+
+    document.getElementById('cancelBtn').addEventListener('click', () => window.close())
+  </script>
+</body>
+</html>
