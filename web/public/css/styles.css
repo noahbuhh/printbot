@@ -1,0 +1,61 @@
+:root {
+  --cy-bg: #05060a; --cy-surface: #0a0d14; --cy-border: #0f1923;
+  --cy-cyan: #00f0ff; --cy-magenta: #ff2d95; --cy-yellow: #ffe156;
+  --cy-green: #39ff14; --cy-text: #c8d6e5; --cy-dim: #4a5568;
+}
+body { background: var(--cy-bg); font-family: 'Rajdhani', sans-serif; color: var(--cy-text); }
+.mono { font-family: 'Share Tech Mono', monospace; font-weight: 500; }
+.card { background: var(--cy-surface); border: 1px solid var(--cy-border); box-shadow: 0 0 15px rgba(0,240,255,0.03); }
+.card-header { background: linear-gradient(90deg, rgba(0,240,255,0.05), transparent); border-bottom: 1px solid var(--cy-border); font-family: 'Orbitron', monospace; font-size: 0.8rem; letter-spacing: 0.1em; text-transform: uppercase; }
+.card-footer { background: var(--cy-surface); border-top: 1px solid var(--cy-border); }
+.modal-content { background: var(--cy-surface); border: 1px solid var(--cy-cyan); box-shadow: 0 0 30px rgba(0,240,255,0.1); }
+.modal-header { border-bottom: 1px solid var(--cy-border); font-family: 'Orbitron', monospace; }
+.modal-footer { border-top: 1px solid var(--cy-border); }
+.form-control, .form-select {
+  background: var(--cy-bg); border-color: var(--cy-border); color: var(--cy-text);
+  font-family: 'Share Tech Mono', monospace; font-size: 0.9rem;
+}
+.form-control:focus, .form-select:focus {
+  background: var(--cy-bg); border-color: var(--cy-cyan); color: #fff;
+  box-shadow: 0 0 8px rgba(0,240,255,0.15);
+}
+.form-control::placeholder { color: var(--cy-dim); }
+.form-range { accent-color: var(--cy-cyan); }
+.printer-running { border-left: 3px solid var(--cy-green) !important; box-shadow: 0 0 12px rgba(57,255,20,0.08); }
+.printer-finish  { border-left: 3px solid var(--cy-yellow) !important; box-shadow: 0 0 12px rgba(255,225,86,0.08); }
+.printer-idle    { border-left: 3px solid var(--cy-dim) !important; }
+.printer-unknown { border-left: 3px solid #1a1a2e !important; }
+.add-toggle { cursor: pointer; user-select: none; }
+.btn-outline-primary { border-color: var(--cy-cyan); color: var(--cy-cyan); }
+.btn-outline-primary:hover { background: rgba(0,240,255,0.12); color: var(--cy-cyan); border-color: var(--cy-cyan); }
+.btn-outline-danger { border-color: var(--cy-magenta); color: var(--cy-magenta); }
+.btn-outline-danger:hover { background: rgba(255,45,149,0.12); color: var(--cy-magenta); border-color: var(--cy-magenta); }
+.btn-outline-warning { border-color: var(--cy-yellow); color: var(--cy-yellow); }
+.btn-outline-warning:hover { background: rgba(255,225,86,0.12); color: var(--cy-yellow); border-color: var(--cy-yellow); }
+.btn-outline-success { border-color: var(--cy-green); color: var(--cy-green); }
+.btn-outline-success:hover { background: rgba(57,255,20,0.12); color: var(--cy-green); border-color: var(--cy-green); }
+.btn-outline-secondary { border-color: var(--cy-dim); color: var(--cy-dim); }
+.btn-outline-secondary:hover { background: rgba(74,85,104,0.15); color: var(--cy-text); }
+.btn-primary { background: linear-gradient(135deg, #00b4d8, #0077b6); border: none; }
+.btn-primary:hover { background: linear-gradient(135deg, #00d4ff, #0099e6); }
+.btn-success { background: linear-gradient(135deg, #2d6a4f, #40916c); border: none; }
+.btn-danger { background: linear-gradient(135deg, #6b1a1a, #a02020); border: none; }
+.text-success { color: var(--cy-green) !important; }
+.text-warning { color: var(--cy-yellow) !important; }
+.text-danger { color: var(--cy-magenta) !important; }
+.text-info { color: var(--cy-cyan) !important; }
+.text-muted { color: var(--cy-dim) !important; }
+.badge { font-family: 'Share Tech Mono', monospace; font-weight: 500; }
+.table { --bs-table-bg: transparent; color: var(--cy-text); }
+hr { border-color: var(--cy-border) !important; }
+@keyframes pulse {
+  0%,100% { opacity:1; transform:scale(1); }
+  50%      { opacity:.5; transform:scale(.8); }
+}
+@keyframes pulseGlow {
+  0%,100% { box-shadow: 0 0 5px rgba(0,240,255,0.1); }
+  50%      { box-shadow: 0 0 15px rgba(0,240,255,0.2); }
+}
+.dot-pulse { display:inline-block; width:8px; height:8px; border-radius:50%;
+             background: var(--cy-green); animation:pulse 1.5s ease-in-out infinite; }
+.dot-pulse-sm { width:7px; height:7px; }

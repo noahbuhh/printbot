@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Autoprint</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/darkly/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar navbar-dark" style="background:linear-gradient(180deg,rgba(0,240,255,0.03),var(--cy-bg));border-bottom:1px solid var(--cy-border);position:relative">
+  <div style="position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cy-cyan),var(--cy-magenta),transparent)"></div>
+    <div class="container-fluid px-4">
+      <span class="navbar-brand d-flex align-items-center gap-2 mb-0">
+        <i class="bi bi-printer-fill fs-5" style="color:var(--cy-cyan)"></i>
+        <span style="font-family:'Orbitron',monospace;font-weight:900;font-size:1.1rem;letter-spacing:0.15em;background:linear-gradient(90deg,var(--cy-cyan),var(--cy-magenta));-webkit-background-clip:text;-webkit-text-fill-color:transparent">AUTOPRINT</span>
+        <span style="font-size:0.72rem;letter-spacing:0.06em;color:var(--cy-dim)">3D PRINT MONITOR</span>
+      </span>
+      <span class="d-flex align-items-center gap-2">
+        <span class="dot-pulse"></span>
+        <span class="text-success mono" style="font-size:0.8rem">ONLINE</span>
+      </span>
+    </div>
+  </nav>
+
+  <div class="container-fluid px-4 py-4">
+
+    <!-- Global actions -->
+    <div class="d-flex gap-2 mb-3">
+      <button class="btn btn-outline-primary btn-sm" id="openAllBtn">
+        <i class="bi bi-unlock me-1"></i>Open All
+      </button>
+      <button class="btn btn-outline-danger btn-sm" id="closeAllBtn">
+        <i class="bi bi-lock me-1"></i>Close All
+      </button>
+    </div>
+
+    <!-- Printer Grid -->
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3 mb-4" id="printerGrid">
+      <div class="col"><div class="card h-100 p-3 text-muted"><em>Loading printers...</em></div></div>
+    </div>
+
+    <!-- Camera -->
+    <div class="card mb-4">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-camera-video-fill"></i>
+        <span class="fw-semibold">Camera</span>
+        <div class="d-flex align-items-center gap-1 ms-auto">
+          <button class="btn btn-outline-secondary btn-sm" id="camZoomOut" title="Zoom out">
+            <i class="bi bi-zoom-out"></i>
+          </button>
+          <span class="mono text-muted" id="camZoomLabel" style="font-size:0.78rem;min-width:3rem;text-align:center">100%</span>
+          <button class="btn btn-outline-secondary btn-sm" id="camZoomIn" title="Zoom in">
+            <i class="bi bi-zoom-in"></i>
+          </button>
+          <div class="vr mx-1" style="opacity:0.2"></div>
+          <button class="btn btn-outline-secondary btn-sm" id="camRotLeft" title="Rotate left">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="camRotRight" title="Rotate right">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+      </div>
+      <div class="card-body p-0" style="background:#000;border-radius:0 0 4px 4px;overflow:hidden;min-height:80px">
+        <div id="camWrap" style="width:100%;display:flex;align-items:center;justify-content:center">
+          <img id="camImg" src="/stream/?action=stream" alt="Camera stream"
+               style="width:100%;max-height:480px;object-fit:contain;display:block;transition:transform 0.2s;transform-origin:center center"
+               onerror="this.style.display='none';document.getElementById('camErr').style.display='block'">
+        </div>
+        <div id="camErr" style="display:none;padding:1rem;color:var(--cy-dim);font-size:0.85rem">
+          <i class="bi bi-camera-video-off me-2"></i>Camera not available
+        </div>
+      </div>
+    </div>
+
+    <!-- Recordings -->
+    <div class="card mb-4">
+      <div class="card-header add-toggle d-flex align-items-center justify-content-between"
+           id="recToggle">
+        <span><i class="bi bi-film me-2"></i>Recordings</span>
+        <i class="bi bi-chevron-down" id="recChevron"></i>
+      </div>
+      <div id="recBody" style="display:none">
+        <div class="card-body p-2" id="recList">
+          <span class="text-muted fst-italic">Loading…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add Printer -->
+    <div class="card mb-4">
+      <div class="card-header add-toggle d-flex align-items-center justify-content-between"
+           id="addToggle">
+        <span><i class="bi bi-plus-circle me-2"></i>Add Printer</span>
+        <i class="bi bi-chevron-down" id="addChevron"></i>
+      </div>
+      <div id="addBody" style="display:none">
+        <div class="card-body">
+          <div class="row g-2">
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Name</label>
+              <input class="form-control form-control-sm" id="pName" placeholder="P1S Living Room">
+              <label class="form-label small text-muted mt-2">IP Address</label>
+              <input class="form-control form-control-sm" id="pIp" placeholder="192.168.1.50">
+              <label class="form-label small text-muted mt-2">Serial Number</label>
+              <input class="form-control form-control-sm" id="pSerial" placeholder="01P00A...">
+              <label class="form-label small text-muted mt-2">GPIO Pin</label>
+              <input class="form-control form-control-sm" type="number" id="pPin" placeholder="18" min="0" max="27">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Access Code</label>
+              <input class="form-control form-control-sm" id="pCode" placeholder="12345678">
+              <label class="form-label small text-muted mt-2">Trigger Temp (C)</label>
+              <input class="form-control form-control-sm" type="number" id="pThreshold" value="35" min="20" max="80">
+              <label class="form-label small text-muted mt-2">Open Position (us)</label>
+              <input class="form-control form-control-sm" type="number" id="pOpenPos" value="1900" min="500" max="2500">
+              <label class="form-label small text-muted mt-2">Close Position (us)</label>
+              <input class="form-control form-control-sm" type="number" id="pClosePos" value="2500" min="500" max="2500">
+            </div>
+          </div>
+          <button class="btn btn-primary w-100 mt-3" id="addSubmitBtn">
+            <i class="bi bi-plus-lg me-1"></i> Add Printer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Global Servo Settings -->
+    <div class="card">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-sliders"></i>
+        <span class="fw-semibold">Global Servo Settings</span>
+        <span class="text-muted ms-1" style="font-size:0.78rem">— applies to all printers</span>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label small text-muted">
+              Open Position &nbsp;<span class="mono text-light" id="openVal"></span>
+            </label>
+            <input type="range" class="form-range" min="500" max="2500" id="openPos">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small text-muted">
+              Close Position &nbsp;<span class="mono text-light" id="closeVal"></span>
+            </label>
+            <input type="range" class="form-range" min="500" max="2500" id="closePos">
+          </div>
+        </div>
+        <button class="btn btn-success mt-3" id="saveGlobalBtn">
+          <i class="bi bi-broadcast me-1"></i> Apply to All Printers
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Edit Printer Modal -->
+  <div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Printer</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="editId">
+          <div class="row g-2">
+            <div class="col-12">
+              <label class="form-label small text-muted">Name</label>
+              <input class="form-control form-control-sm" id="editName">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">IP Address</label>
+              <input class="form-control form-control-sm" id="editIp" placeholder="192.168.1.50">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Serial Number</label>
+              <input class="form-control form-control-sm" id="editSerial" placeholder="01P00A...">
+            </div>
+            <div class="col-12">
+              <label class="form-label small text-muted">Access Code</label>
+              <input class="form-control form-control-sm" id="editCode" placeholder="12345678">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">GPIO Pin</label>
+              <input class="form-control form-control-sm" type="number" id="editPin" min="0" max="27">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Trigger Temp (C)</label>
+              <input class="form-control form-control-sm" type="number" id="editThreshold" min="20" max="80">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Open Position (us)</label>
+              <input class="form-control form-control-sm" type="number" id="editOpenPos" min="500" max="2500">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Close Position (us)</label>
+              <input class="form-control form-control-sm" type="number" id="editClosePos" min="500" max="2500">
+            </div>
+            <div class="col-12"><hr class="border-secondary my-1"></div>
+            <div class="col-12">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="editPreheatEnabled">
+                <label class="form-check-label small text-muted" for="editPreheatEnabled">
+                  Chamber preheat before loop print
+                </label>
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Bed Temp (°C)</label>
+              <input class="form-control form-control-sm" type="number" id="editPreheatTemp" min="20" max="110" value="100">
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted">Soak Time (min)</label>
+              <input class="form-control form-control-sm" type="number" id="editPreheatMinutes" min="1" max="60" value="10">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-primary btn-sm" id="saveEditBtn">
+            <i class="bi bi-save me-1"></i> Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loop Print Modal -->
+  <div class="modal fade" id="loopModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-arrow-repeat me-2"></i>Loop Print — select file</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="loopPid">
+          <div id="loopFileList" class="list-group mb-3">
+            <span class="text-muted fst-italic p-1">Loading files…</span>
+          </div>
+          <hr style="border-color:var(--cy-border)">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="loopPreheatEnabled">
+            <label class="form-check-label" for="loopPreheatEnabled">
+              <i class="bi bi-thermometer-half me-1"></i>Vorheizen vor jedem Druck
+            </label>
+          </div>
+          <div id="loopPreheatOptions" style="display:none">
+            <div class="row g-2 mt-1">
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">Betttemperatur (°C)</label>
+                <input type="number" class="form-control form-control-sm" id="loopPreheatTemp" value="100" min="20" max="120">
+              </div>
+              <div class="col-6">
+                <label class="form-label small text-muted mb-1">Einweichzeit (Min)</label>
+                <input type="number" class="form-control form-control-sm" id="loopPreheatMinutes" value="10" min="0" max="60">
+              </div>
+            </div>
+          </div>
+          <hr style="border-color:var(--cy-border)">
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="loopContinueOnFailed">
+            <label class="form-check-label" for="loopContinueOnFailed">
+              <i class="bi bi-exclamation-triangle me-1"></i>Bei fehlgeschlagenem Druck weitermachen
+            </label>
+          </div>
+          <div class="row g-2 mb-1">
+            <div class="col-12">
+              <label class="form-label small text-muted mb-1">
+                Stall-Watchdog Timeout (Min, 0 = aus)
+              </label>
+              <input type="number" class="form-control form-control-sm" id="loopStallTimeout" value="0" min="0" max="120">
+              <div class="form-text small">Wenn der Drucker den Druckbefehl nicht annimmt, wird nach X Min erneut versucht.</div>
+            </div>
+          </div>
+          <hr style="border-color:var(--cy-border)">
+          <div class="small text-muted mb-1">
+            <i class="bi bi-printer me-1"></i>Also loop on (file must already exist on each):
+          </div>
+          <div id="loopExtraPrinters" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success btn-sm" id="startLoopBtn" disabled>
+            <i class="bi bi-play-fill me-1"></i>Start Loop
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recording Video Modal -->
+  <div class="modal fade" id="recVideoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title mono" id="recVideoTitle" style="font-size:0.85rem"></h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0" style="background:#000">
+          <video id="recVideo" controls style="width:100%;max-height:70vh;display:block">
+            Your browser does not support the video tag.
+          </video>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Print Modal -->
+  <div class="modal fade" id="printModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-play-fill me-2"></i>Print — select file</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="printPid">
+          <div id="printFileList" class="list-group mb-2">
+            <span class="text-muted fst-italic p-1">Loading files…</span>
+          </div>
+          <div class="d-flex gap-2 mb-3">
+            <button type="button" class="btn btn-outline-danger btn-sm" id="bulkDeleteBtn" disabled>
+              <i class="bi bi-trash3 me-1"></i>Delete Selected (<span id="bulkDeleteCount">0</span>)
+            </button>
+          </div>
+          <hr style="border-color:var(--cy-border)">
+          <div class="small text-muted mb-1">
+            <i class="bi bi-printer me-1"></i>Also print on (file must already exist on each):
+          </div>
+          <div id="printExtraPrinters" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn btn-success btn-sm" id="confirmPrintBtn" disabled>
+            <i class="bi bi-play-fill me-1"></i>Start Print
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap + app scripts (order matters: utils → cards → modals → recordings → app) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/camera.js"></script>
+  <script src="/js/cards.js"></script>
+  <script src="/js/modals.js"></script>
+  <script src="/js/recordings.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
