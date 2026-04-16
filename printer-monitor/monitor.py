@@ -1,4 +1,5 @@
 import ftplib
+import ipaddress
 import json
 import os
 import socket
@@ -935,6 +936,171 @@ def delete_recording(filename):
     return jsonify({'status': 'deleted'})
 
 
+# ── IP Discovery ───────────────────────────────────────────────────────────
+
+def _get_scan_subnet():
+    """Determine the local subnet to scan by checking known printer IPs."""
+    with config_lock:
+        ips = [p['ip'] for p in printers if p.get('ip')]
+    if not ips:
+        return None
+    # Use the first printer's /24 subnet
+    try:
+        net = ipaddress.IPv4Network(ips[0] + '/24', strict=False)
+        return net
+    except Exception:
+        return None
+
+
+def _check_bambu_mqtt(ip, timeout=2):
+    """Try a TLS connect to port 8883. Returns True if a Bambu printer answers."""
+    try:
+        sock = socket.create_connection((str(ip), 8883), timeout=timeout)
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ssock = ctx.wrap_socket(sock)
+        ssock.close()
+        return True
+    except Exception:
+        return False
+
+
+def scan_subnet_for_printers(subnet, timeout=2):
+    """Scan a /24 subnet for hosts with port 8883 open (Bambu MQTT).
+    Returns list of IP strings that responded."""
+    found = []
+    lock = threading.Lock()
+
+    def probe(ip):
+        if _check_bambu_mqtt(ip, timeout):
+            with lock:
+                found.append(str(ip))
+
+    threads = []
+    for ip in subnet.hosts():
+        t = threading.Thread(target=probe, args=(ip,), daemon=True)
+        threads.append(t)
+        t.start()
+    for t in threads:
+        t.join(timeout=timeout + 2)
+    return found
+
+
+def _verify_serial(ip, access_code, expected_serial, timeout=10):
+    """Connect via MQTT to ip:8883 and check if the printer reports the expected serial.
+    Returns True if serial matches, False otherwise."""
+    result = {'match': False}
+    event = threading.Event()
+
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            # Subscribe to any report — the serial is in the topic itself
+            client.subscribe(f"device/{expected_serial}/report")
+            # Push a status request to get a quick response
+            client.publish(f"device/{expected_serial}/request",
+                           json.dumps({"pushing": {"sequence_id": "0",
+                                                   "command": "pushall"}}))
+        else:
+            event.set()
+
+    def on_message(client, userdata, msg):
+        # If we receive any message on this topic, the serial matches
+        if expected_serial in msg.topic:
+            result['match'] = True
+        event.set()
+
+    client = mqtt.Client()
+    client.username_pw_set('bblp', access_code)
+    client.tls_set(cert_reqs=ssl.CERT_NONE)
+    client.tls_insecure_set(True)
+    client.on_connect = on_connect
+    client.on_message = on_message
+    try:
+        client.connect(ip, 8883, keepalive=10)
+        client.loop_start()
+        event.wait(timeout=timeout)
+        client.loop_stop()
+        client.disconnect()
+    except Exception:
+        pass
+    return result['match']
+
+
+def ip_watcher():
+    """Periodically check if any printer's MQTT connection is down.
+    If so, scan the subnet for Bambu printers and reconnect."""
+    while True:
+        time.sleep(120)  # check every 2 minutes
+        try:
+            # Find disconnected printers
+            with config_lock:
+                printers_snapshot = [
+                    (p['id'], p['serial'], p['ip'], p['access_code'], p['name'])
+                    for p in printers
+                ]
+            with state_lock:
+                disconnected = [
+                    (pid, serial, ip, ac, name)
+                    for pid, serial, ip, ac, name in printers_snapshot
+                    if not live_state.get(pid, {}).get('connected', False)
+                ]
+
+            if not disconnected:
+                continue
+
+            print(f"[IP-WATCH] {len(disconnected)} printer(s) disconnected, scanning...",
+                  flush=True)
+
+            subnet = _get_scan_subnet()
+            if not subnet:
+                continue
+
+            candidates = scan_subnet_for_printers(subnet)
+            # Remove IPs that are already in use by connected printers
+            with config_lock:
+                known_ips = {p['ip'] for p in printers}
+            with state_lock:
+                connected_ips = {
+                    p['ip'] for p in printers
+                    if live_state.get(p['id'], {}).get('connected', False)
+                }
+            new_ips = [ip for ip in candidates if ip not in connected_ips]
+
+            if not new_ips:
+                print(f"[IP-WATCH] no new Bambu hosts found on {subnet}", flush=True)
+                continue
+
+            print(f"[IP-WATCH] found candidate IPs: {new_ips}", flush=True)
+
+            for pid, serial, old_ip, access_code, name in disconnected:
+                # First check if old IP came back online
+                if old_ip in candidates:
+                    print(f"[IP-WATCH] {name} back online at same IP {old_ip}", flush=True)
+                    continue  # MQTT auto-reconnect should handle this
+
+                # Try each new IP
+                for candidate_ip in new_ips:
+                    if _verify_serial(candidate_ip, access_code, serial):
+                        print(f"[IP-WATCH] {name} IP changed: {old_ip} → {candidate_ip}",
+                              flush=True)
+                        with config_lock:
+                            printer = next((p for p in printers if p['id'] == pid), None)
+                            if printer:
+                                printer['ip'] = candidate_ip
+                                save_config()
+                                printer_copy = dict(printer)
+                        disconnect_printer(pid)
+                        connect_printer(printer_copy)
+                        # Remove from candidates so we don't match it again
+                        new_ips.remove(candidate_ip)
+                        print(f"[IP-WATCH] {name} reconnected at {candidate_ip}",
+                              flush=True)
+                        break
+        except Exception as e:
+            print(f"[IP-WATCH] error: {e}", flush=True)
+
+
 # ── Startup ─────────────────────────────────────────────────────────────────
 
 def init():
@@ -944,6 +1110,7 @@ def init():
     for p in loaded:
         connect_printer(p)
     threading.Thread(target=loop_watcher, daemon=True).start()
+    threading.Thread(target=ip_watcher, daemon=True).start()
 
 
 if __name__ == '__main__':
