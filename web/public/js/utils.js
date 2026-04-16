@@ -40,6 +40,29 @@ function makeHmsHtml(hms) {
     + '<span class="text-muted ms-auto" style="font-size:0.72rem">clear on printer screen</span>'
     + '</div>';
 }
+function makeProgressHtml(s) {
+  var gstate = ((s || {}).gcode_state || '').toUpperCase();
+  if (gstate !== 'RUNNING' && gstate !== 'PREPARE') return '';
+  var pct = s.mc_percent;
+  if (pct == null) return '';
+  var remaining = s.mc_remaining_time;
+  var timeStr = '';
+  if (remaining != null && remaining > 0) {
+    var h = Math.floor(remaining / 60);
+    var m = remaining % 60;
+    timeStr = h > 0 ? (h + 'h ' + m + 'min') : (m + 'min');
+  }
+  var barColor = pct < 50 ? 'var(--cy-cyan)' : pct < 90 ? 'var(--cy-yellow)' : 'var(--cy-green)';
+  return '<div class="mb-2">'
+    + '<div class="d-flex align-items-center justify-content-between mb-1" style="font-size:0.78rem">'
+    + '<span class="mono" style="color:' + barColor + '">' + Math.round(pct) + '%</span>'
+    + (timeStr ? '<span class="text-muted">' + timeStr + ' left</span>' : '')
+    + '</div>'
+    + '<div style="height:4px;background:var(--cy-border);border-radius:2px;overflow:hidden">'
+    + '<div style="width:' + Math.min(100, pct) + '%;height:100%;background:' + barColor
+    + ';border-radius:2px;transition:width 0.5s ease"></div>'
+    + '</div></div>';
+}
 function makeServoHtml(servo_open) {
   if (servo_open === true)  return '<i class="bi bi-unlock-fill text-success me-1"></i><span class="text-success small">Open</span>';
   if (servo_open === false) return '<i class="bi bi-lock-fill text-secondary me-1"></i><span class="text-secondary small">Closed</span>';

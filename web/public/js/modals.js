@@ -272,6 +272,66 @@ function showPrintModal(pid) {
     });
 }
 
+// ── File upload ─────────────────────────────────────────────────────────────
+document.getElementById('uploadFile').addEventListener('change', function() {
+  document.getElementById('uploadBtn').disabled = !this.files.length;
+  document.getElementById('uploadStatus').innerHTML = '';
+});
+
+document.getElementById('uploadBtn').addEventListener('click', function() {
+  var fileInput = document.getElementById('uploadFile');
+  var file = fileInput.files[0];
+  if (!file) return;
+  var pid = document.getElementById('printPid').value;
+  var toAll = document.getElementById('uploadToAll').checked;
+  var statusEl = document.getElementById('uploadStatus');
+  var btn = document.getElementById('uploadBtn');
+  btn.disabled = true;
+  statusEl.innerHTML = '<span style="color:var(--cy-cyan)"><i class="bi bi-hourglass-split me-1"></i>Uploading ' + escHtml(file.name) + '…</span>';
+
+  var form = new FormData();
+  form.append('file', file);
+
+  if (toAll && currentPrinters.length > 1) {
+    form.append('printer_ids', currentPrinters.map(function(p) { return p.id; }).join(','));
+    fetch('/printer-monitor/multi-upload', { method: 'POST', body: form })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        var failed = (d.results || []).filter(function(x) { return x.status !== 'uploaded'; });
+        if (failed.length) {
+          statusEl.innerHTML = '<span style="color:var(--cy-yellow)"><i class="bi bi-exclamation-triangle me-1"></i>'
+            + failed.map(function(x) { return escHtml(x.name) + ' failed'; }).join(', ') + '</span>';
+        } else {
+          statusEl.innerHTML = '<span style="color:var(--cy-green)"><i class="bi bi-check-lg me-1"></i>Uploaded to '
+            + d.results.length + ' printer(s)</span>';
+        }
+        fileInput.value = '';
+        btn.disabled = true;
+        showPrintModal(pid);
+      })
+      .catch(function(err) {
+        statusEl.innerHTML = '<span style="color:var(--cy-magenta)"><i class="bi bi-x-circle me-1"></i>' + escHtml(err.message) + '</span>';
+        btn.disabled = false;
+      });
+  } else {
+    fetch('/printer-monitor/printers/' + pid + '/files/upload', { method: 'POST', body: form })
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.error) throw new Error(d.error);
+        statusEl.innerHTML = '<span style="color:var(--cy-green)"><i class="bi bi-check-lg me-1"></i>'
+          + escHtml(d.file) + ' uploaded</span>';
+        fileInput.value = '';
+        btn.disabled = true;
+        showPrintModal(pid);
+      })
+      .catch(function(err) {
+        statusEl.innerHTML = '<span style="color:var(--cy-magenta)"><i class="bi bi-x-circle me-1"></i>' + escHtml(err.message) + '</span>';
+        btn.disabled = false;
+      });
+  }
+});
+
 document.getElementById('printFileList').addEventListener('click', function(e) {
   if (e.target.classList.contains('file-check')) {
     updateBulkDeleteBtn();

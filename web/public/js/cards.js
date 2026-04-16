@@ -124,6 +124,7 @@ function buildCard(p) {
     + '<span class="small text-muted">Nozzle</span>'
     + '<span id="nozzle-' + pid + '">' + tempDisplay(s.nozzle_temp) + '</span>'
     + '</div>'
+    + '<div id="progress-' + pid + '">' + makeProgressHtml(s) + '</div>'
     + '<div id="rate-' + pid + '">' + makeRateHtml(p.id) + '</div>'
     + '<div class="mb-1" style="font-size:0.78rem;color:var(--cy-dim)">'
     + '<i class="bi bi-cpu"></i> GPIO' + escHtml(String(p.gpio_pin))
@@ -179,6 +180,9 @@ function updateCardData(p) {
 
   var nozzle = document.getElementById('nozzle-' + pid);
   if (nozzle) nozzle.innerHTML = tempDisplay(s.nozzle_temp);
+
+  var progress = document.getElementById('progress-' + pid);
+  if (progress) progress.innerHTML = makeProgressHtml(s);
 
   var rate = document.getElementById('rate-' + pid);
   if (rate) rate.innerHTML = makeRateHtml(pid);

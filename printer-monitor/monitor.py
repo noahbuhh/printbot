@@ -1,4 +1,5 @@
 import ftplib
+import io
 import ipaddress
 import json
 import os
@@ -715,6 +716,72 @@ def delete_file(pid, filename):
         return jsonify({'error': f'FTP delete error: {e}'}), 502
     print(f"[FTP] deleted file '{filename}' from printer {pid}", flush=True)
     return jsonify({'status': 'deleted', 'file': filename})
+
+
+@app.route('/printers/<pid>/files/upload', methods=['POST'])
+def upload_file(pid):
+    """Upload a .3mf or .gcode file to the printer's SD card via FTP."""
+    with config_lock:
+        p = next((p for p in printers if p['id'] == pid), None)
+    if p is None:
+        return jsonify({'error': 'Not found'}), 404
+    f = request.files.get('file')
+    if not f or not f.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    filename = f.filename
+    if not (filename.endswith('.3mf') or filename.endswith('.gcode')):
+        return jsonify({'error': 'Only .3mf and .gcode files allowed'}), 400
+    file_data = f.read()
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ftp = _ImplicitFTPS(context=ctx)
+    try:
+        ftp.connect(p['ip'], 990, timeout=30)
+        ftp.login('bblp', p['access_code'])
+        ftp.prot_p()
+        ftp.storbinary(f'STOR /sdcard/{filename}', io.BytesIO(file_data))
+        ftp.quit()
+    except Exception as e:
+        return jsonify({'error': f'FTP upload error: {e}'}), 502
+    print(f"[FTP] uploaded '{filename}' ({len(file_data)} bytes) to printer {p['name']}", flush=True)
+    return jsonify({'status': 'uploaded', 'file': filename, 'size': len(file_data)})
+
+
+@app.route('/multi-upload', methods=['POST'])
+def multi_upload():
+    """Upload a file to multiple printers at once."""
+    f = request.files.get('file')
+    printer_ids = request.form.get('printer_ids', '')
+    if not f or not f.filename:
+        return jsonify({'error': 'No file provided'}), 400
+    filename = f.filename
+    if not (filename.endswith('.3mf') or filename.endswith('.gcode')):
+        return jsonify({'error': 'Only .3mf and .gcode files allowed'}), 400
+    ids = [x.strip() for x in printer_ids.split(',') if x.strip()]
+    if not ids:
+        return jsonify({'error': 'No printer_ids provided'}), 400
+    file_data = f.read()
+    with config_lock:
+        targets = [p for p in printers if p['id'] in ids]
+    results = []
+    for p in targets:
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ftp = _ImplicitFTPS(context=ctx)
+        try:
+            ftp.connect(p['ip'], 990, timeout=30)
+            ftp.login('bblp', p['access_code'])
+            ftp.prot_p()
+            import io
+            ftp.storbinary(f'STOR /sdcard/{filename}', io.BytesIO(file_data))
+            ftp.quit()
+            results.append({'id': p['id'], 'name': p['name'], 'status': 'uploaded'})
+            print(f"[FTP] uploaded '{filename}' to {p['name']}", flush=True)
+        except Exception as e:
+            results.append({'id': p['id'], 'name': p['name'], 'status': 'error', 'error': str(e)})
+    return jsonify({'file': filename, 'size': len(file_data), 'results': results})
 
 
 @app.route('/printers/<pid>/files/bulk-delete', methods=['POST'])
