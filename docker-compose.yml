@@ -6,6 +6,7 @@ volumes:
 services:
   nginx:
     build: ./nginx
+    restart: always
     ports:
       - 80:80
   #sample1:
@@ -14,6 +15,7 @@ services:
   #    SERVICE_NAME: "sample1"
   web:
     build: ./web
+    restart: always
     ports:
       - 3000:3000
   door-motor:
@@ -28,11 +30,8 @@ services:
     restart: always
     volumes:
       - printer-data:/data
-  #ustreamer:
-  #  build: ./ustreamer
-  #  devices:
-  #    - "/dev/video0:/dev/video0"
-  #    - "/dev/video1:/dev/video1"
-  #  privileged: true
-  #  ports:
-  #    - "8080:8080"
+  ustreamer:
+    build: ./ustreamer
+    devices:
+      - "/dev/video0:/dev/video0"
+    privileged: true
